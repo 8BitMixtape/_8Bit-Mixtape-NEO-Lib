@@ -75,13 +75,18 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEOPIXELPIN, NEO_GRB + N
 
 uint8_t getButton()
 {
-  uint8_t button = 0;
-  if (analogRead(BUTTONS_ADC) < Vbutton_left) button = 1;
-  if (analogRead(BUTTONS_ADC) < Vbutton_right) button = 2;
-  if (analogRead(BUTTONS_ADC) < Vbutton_both) button = 3;
+  uint8_t  button = BUTTON_NONE;
+  uint16_t pinVoltage;
+  
+  pinVoltage = analogRead( BUTTONS_ADC );
+  
+  if ( pinVoltage < Vbutton_left  ) button = BUTTON_LEFT;
+  if ( pinVoltage < Vbutton_right ) button = BUTTON_RIGHT;
+  if ( pinVoltage < Vbutton_both  ) button = BUTTON_LEFT + BUTTON_RIGHT;
 
   return button;
 }
+
 
 uint16_t analogReadScaled(uint8_t channel)
 {
@@ -96,6 +101,83 @@ uint16_t getPoti(uint8_t channel)
   analogReadScaled(channel);
 }
 
+/*
+ uint8_t wasButtonPressed()
+ 
+ returns the button which was pressed when the button is released.
+ 
+ return values:
+ 
+ BUTTON_LEFT
+ BUTTON_RIGHT
+ BUTTON_LEFT+BUTTON_RIGHT
+ 
+ One of the most underestimated tasks is debouncing a button. 
+ This routine works in the most cases. It could be useful to 
+ add some time delay after the button is released to prevent
+ bouncing. 
+ 
+ v0.1  16.03.2017 -H-A-B-E-R-E-R-  first version 
+ 
+*/
+
+#define BUTTON_NOTPRESSED   0
+#define BUTTON_PRESSED      1
+
+uint8_t wasButtonPressed()
+{
+  static uint8_t buttonPressed    = false;
+  static uint8_t buttonState      = 0;
+  static uint8_t buttonValue      = BUTTON_NONE;
+  static uint8_t buttonMaxValue   = 0;
+
+  uint8_t        buttonReturnValue;  
+  uint16_t       pinVoltage;
+    
+  pinVoltage = analogRead( BUTTONS_ADC );
+  
+  // hysteresis switch
+  if( pinVoltage > Vbutton_releaseLevel ) buttonPressed = false;
+  if( pinVoltage < Vbutton_pressedLevel ) buttonPressed = true;
+
+  buttonReturnValue = BUTTON_NONE;
+  
+  switch( buttonState )
+  {
+    case BUTTON_NOTPRESSED:
+    {
+      buttonMaxValue = 0;      
+      
+      if( buttonPressed )
+      {      
+        buttonState = BUTTON_PRESSED;
+      }
+    };break;
+    
+    case BUTTON_PRESSED:
+    {
+      if( buttonPressed ) // find minimum volage level during button pressed period
+      {
+        buttonValue = BUTTON_NONE; 
+        
+             if ( pinVoltage < Vbutton_both  ) buttonValue = BUTTON_LEFT + BUTTON_RIGHT;
+        else if ( pinVoltage < Vbutton_right ) buttonValue =               BUTTON_RIGHT;
+        else if ( pinVoltage < Vbutton_left  ) buttonValue = BUTTON_LEFT               ;      
+        
+        if( buttonValue > buttonMaxValue ) buttonMaxValue = buttonValue;   
+                                     
+      }else
+      {
+        buttonState = BUTTON_NOTPRESSED;
+	buttonReturnValue = buttonMaxValue; 
+      }
+      ;break;
+
+    }
+  }
+  
+  return buttonReturnValue; 
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /* Specific functions of the NEO-Pixel Library
